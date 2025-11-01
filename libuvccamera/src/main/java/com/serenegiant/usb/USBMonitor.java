@@ -167,11 +167,11 @@ public final class USBMonitor {
 			if (DEBUG) Log.i(TAG, "register:");
 			final Context context = mWeakContext.get();
 			if (context != null) {
-				mPermissionIntent = PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), 0);
+				mPermissionIntent = PendingIntent.getBroadcast(context, 0, new Intent(ACTION_USB_PERMISSION), PendingIntent.FLAG_IMMUTABLE);
 				final IntentFilter filter = new IntentFilter(ACTION_USB_PERMISSION);
 				// ACTION_USB_DEVICE_ATTACHED never comes on some devices so it should not be added here
 				filter.addAction(UsbManager.ACTION_USB_DEVICE_DETACHED);
-				context.registerReceiver(mUsbReceiver, filter);
+				context.registerReceiver(mUsbReceiver, filter, Context.RECEIVER_EXPORTED);
 			}
 			// start connection check
 			mDeviceCounts = 0;
@@ -451,16 +451,17 @@ public final class USBMonitor {
 	 * @throws SecurityException パーミッションがなければSecurityExceptionを投げる
 	 */
 	public UsbControlBlock openDevice(final UsbDevice device) throws SecurityException {
-		if (hasPermission(device)) {
-			UsbControlBlock result = mCtrlBlocks.get(device);
-			if (result == null) {
-				result = new UsbControlBlock(USBMonitor.this, device);    // この中でopenDeviceする
-				mCtrlBlocks.put(device, result);
-			}
-			return result;
-		} else {
-			throw new SecurityException("has no permission");
+		if (!hasPermission(device)) {
+			// Request permission if not granted
+			requestPermission(device);
+			throw new SecurityException("has no permission (requested)");
 		}
+		UsbControlBlock result = mCtrlBlocks.get(device);
+		if (result == null) {
+			result = new UsbControlBlock(USBMonitor.this, device);    // この中でopenDeviceする
+			mCtrlBlocks.put(device, result);
+		}
+		return result;
 	}
 
 	/**
